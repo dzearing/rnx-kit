@@ -1,6 +1,7 @@
 import os from "os";
 
 import { Usage } from "../../src/usage/usage";
+import { createUsageColors, UsageColorMode } from "../../src/usage/colors";
 
 describe("Usage > usage", () => {
   test("prints usage information", () => {
@@ -11,7 +12,12 @@ describe("Usage > usage", () => {
     };
 
     try {
-      const usage = new Usage("rn-tsc.js", 80, "\n");
+      const usage = new Usage(
+        "rn-tsc.js",
+        80,
+        "\n",
+        createUsageColors(UsageColorMode.None)
+      );
       usage.show();
     } finally {
       console.log = oldLog;

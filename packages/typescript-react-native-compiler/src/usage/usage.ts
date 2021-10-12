@@ -15,8 +15,13 @@ export class Usage {
 
   private pkg: PackageManifest | undefined;
 
-  constructor(scriptPath: string, columns: number, eol: string) {
-    this.colors = createUsageColors();
+  constructor(
+    scriptPath: string,
+    columns: number,
+    eol: string,
+    colors: UsageColors
+  ) {
+    this.colors = colors;
     this.columns = columns;
     this.eol = eol;
 
@@ -122,6 +127,11 @@ export class Usage {
 
 export function usage(): void {
   const columns = Math.min(process.stdout.columns, 120);
-  const usage = new Usage(process.argv[1], columns, os.EOL);
+  const usage = new Usage(
+    process.argv[1],
+    columns,
+    os.EOL,
+    createUsageColors()
+  );
   usage.show();
 }
