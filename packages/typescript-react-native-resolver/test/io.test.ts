@@ -4,7 +4,7 @@ import path from "path";
 import { createLoggedIO } from "../src/io";
 import type { ResolverLog } from "../src/log";
 
-const fixturePath = path.join(process.cwd(), "test", "__fixtures__");
+const fixturePath = path.join(process.cwd(), "test", "__fixtures__", "io-test");
 
 const mockLog = jest.fn();
 const resolverLog: unknown = {
