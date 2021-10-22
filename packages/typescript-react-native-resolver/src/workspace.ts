@@ -4,7 +4,7 @@ import {
   parseModuleRef,
 } from "@rnx-kit/tools-node";
 import path from "path";
-import { WorkspaceInfo } from "workspace-tools";
+import type { WorkspaceInfo } from "workspace-tools";
 
 /**
  * Module reference relative to a workspace (in-repo package).
