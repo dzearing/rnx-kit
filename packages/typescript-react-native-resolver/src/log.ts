@@ -2,6 +2,8 @@ import fs from "fs";
 import os from "os";
 import util from "util";
 
+import type { ModuleResolutionHostLike } from "./types";
+
 export const enum ResolverLogMode {
   Never,
   Always,
@@ -73,4 +75,69 @@ export class ResolverLog {
       console.log(messages);
     }
   }
+}
+
+/**
+ * Wrap a module resolution host's methods which read from the file system,
+ * adding logging to each one.
+ *
+ * @param host Module resolution host
+ * @param resolverLog Log
+ */
+export function changeModuleResolutionHostToLogFileSystemReads(
+  host: ModuleResolutionHostLike
+): void {
+  const originalFileExists = host.fileExists;
+  const originalReadFile = host.readFile;
+  const originalDirectoryExists = host.directoryExists;
+  const originalRealpath = host.realpath;
+  const originalGetDirectories = host.getDirectories;
+
+  host.fileExists = (fileName: string): boolean => {
+    const result = originalFileExists(fileName);
+    if (!result && host.trace) {
+      host.trace(`File '${fileName}' does not exist.`);
+    }
+    return result;
+  };
+
+  host.readFile = (fileName: string): string | undefined => {
+    const result = originalReadFile(fileName);
+    if (host.trace) {
+      if (result) {
+        host.trace(`Read file '${fileName}'.`);
+      } else {
+        host.trace(`File '${fileName}' cannot be read.`);
+      }
+    }
+    return result;
+  };
+
+  host.directoryExists = (directoryName: string): boolean => {
+    const result = originalDirectoryExists(directoryName);
+    if (!result && host.trace) {
+      host.trace(`Directory '${directoryName}' does not exist.`);
+    }
+    return result;
+  };
+
+  if (originalRealpath) {
+    host.realpath = (path: string): string => {
+      const result = originalRealpath(path);
+      if (result && host.trace) {
+        host.trace(`Real path of '${path}' is 'result'.`);
+      }
+      return result;
+    };
+  }
+
+  host.getDirectories = (path: string): string[] => {
+    const result = originalGetDirectories(path);
+    if (host.trace) {
+      const len = result ? result.length.toString() : "0";
+      const suffix = result && result.length === 1 ? "y" : "ies";
+      host.trace(`Found ${len} director${suffix} under '${path}'.`);
+    }
+    return result;
+  };
 }

@@ -3,25 +3,33 @@ import path from "path";
 import ts from "typescript";
 
 import { ResolverLog } from "../src/log";
-import { createLoggedIO } from "../src/io";
 import {
   resolveModule,
   resolveWorkspaceModule,
   resolvePackageModule,
   resolveFileModule,
 } from "../src/resolve";
-import { ResolverContext } from "../src/types";
+import type { ResolverContext, ModuleResolutionHostLike } from "../src/types";
 import type { WorkspaceModuleRef } from "../src/workspace";
 
+const host: ModuleResolutionHostLike = {
+  fileExists: ts.sys.fileExists,
+  readFile: ts.sys.readFile,
+  trace: (s: string) => {
+    // nop
+  },
+  directoryExists: ts.sys.directoryExists,
+  realpath: ts.sys.realpath,
+  getDirectories: ts.sys.getDirectories,
+};
 const mockLog = jest.fn();
 const resolverLog: unknown = {
   log: mockLog,
 };
-const io = createLoggedIO(resolverLog as ResolverLog);
 const platformExtensions = [".ios", ".native"];
 const context: ResolverContext = {
+  host,
   log: resolverLog as ResolverLog,
-  io,
   platformExtensions,
 };
 const extensions = [ts.Extension.Ts, ts.Extension.Tsx, ts.Extension.Dts];
@@ -46,14 +54,12 @@ describe("Resolve > resolveModule", () => {
     const result = resolveModule(context, fixturePath, "carbon", extensions);
     expect(result).not.toBeNil();
     expect(result.resolvedFileName).toEqual(pathOf("carbon.ts"));
-    expect(mockLog).toBeCalled();
   });
 
   test("fails to resolve a module path that does not exist", () => {
     expect(
       resolveModule(context, fixturePath, "does-not-exist", extensions)
     ).toBeUndefined();
-    expect(mockLog).toBeCalled();
   });
 
   function resolveTest(packageDir: string, resolvedPath: string): void {

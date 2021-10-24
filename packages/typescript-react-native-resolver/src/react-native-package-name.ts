@@ -1,4 +1,4 @@
-import { ResolverLog } from "./log";
+import type { ResolverLog } from "./log";
 
 /**
  * Get the name of an out-of-tree platform's react-native package.
@@ -27,18 +27,18 @@ const DEFAULT_PACKAGE_NAME = "react-native";
  * a reference to the target platform's react-native package. This only
  * happens when targeting an out-of-tree platform like Windows or MacOS.
  *
- * @param platform Target react-native platform
- * @param enabled Flag indicating whether or not module replacement is enabled
- * @param resolverLog Log for reporting each module substitution
+ * @param platform Target platform
+ * @param disableReactNativePackageSubstitution Flag controling whether or not the returned function has an effect
+ * @param log Resolver log
  * @returns Function which replaces a 'react-native' module reference, or a function which has no effect if module replacement is not needed or disabled
  */
 export function createReactNativePackageNameReplacer(
   platform: string,
-  enabled: boolean,
-  resolverLog: ResolverLog
+  disableReactNativePackageSubstitution: boolean,
+  log: ResolverLog
 ): (m: string) => string {
   const platformPackageName = getReactNativePlatformPackageName(platform);
-  if (!platformPackageName || !enabled) {
+  if (!platformPackageName || disableReactNativePackageSubstitution) {
     return (m: string) => m;
   }
 
@@ -49,7 +49,7 @@ export function createReactNativePackageNameReplacer(
 
     const replaced =
       platformPackageName + m.substring(DEFAULT_PACKAGE_NAME.length);
-    resolverLog.log("Substituting module '%s' with '%s'.", m, replaced);
+    log.log("Substituting module '%s' with '%s'.", m, replaced);
     return replaced;
   };
 }

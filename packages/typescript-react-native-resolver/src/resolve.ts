@@ -4,6 +4,7 @@ import {
   PackageModuleRef,
 } from "@rnx-kit/tools-node";
 import isString from "lodash/isString";
+import path from "path";
 import ts from "typescript";
 
 import { findModuleFile } from "./module";
@@ -38,13 +39,20 @@ export function resolveModule(
     return findModuleFile(context, packageDir, modulePath, extensions);
   }
 
-  const { io, log } = context;
+  const { host, log } = context;
 
   let module: ts.ResolvedModuleFull | undefined;
 
   //  No path was given. Try resolving the module using package.json
   //  properties.
-  const { types, typings, main } = io.readPackage(packageDir);
+  log.log("Reading package.json from directory %o.", packageDir);
+  const result = host.readFile(path.join(packageDir, "package.json"));
+  if (!result) {
+    throw new Error(
+      `Failed to read package.json from directory '${packageDir}'`
+    );
+  }
+  const { types, typings, main } = JSON.parse(result);
 
   //  Only consult 'types' and 'typings' properties when looking for
   //  type files (.d.ts).
@@ -99,6 +107,36 @@ export function resolveWorkspaceModule(
   );
 }
 
+function findPackageDependencyDir(
+  context: ResolverContext,
+  ref: PackageModuleRef,
+  startDir: string
+): string | undefined {
+  const { log, host } = context;
+
+  log.log(
+    "Searching for external package %o starting in %o.",
+    ref.scope ? ref.scope + "/" + ref.name : ref.name,
+    startDir
+  );
+
+  const suffixDir = path.join("node_modules", ref.scope ?? "", ref.name);
+
+  let searchDir = startDir;
+  const { root: searchRoot } = path.parse(searchDir);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const p = path.join(searchDir, suffixDir);
+    if (host.directoryExists(p)) {
+      return p;
+    }
+    if (searchDir === searchRoot) {
+      return undefined;
+    }
+    searchDir = path.dirname(searchDir);
+  }
+}
+
 /**
  * The module refers to an external package.
  *
@@ -121,7 +159,7 @@ export function resolvePackageModule(
   searchDir: string,
   extensions: ts.Extension[]
 ): ts.ResolvedModuleFull | undefined {
-  const { io, log } = context;
+  const { log } = context;
 
   let module: ts.ResolvedModuleFull | undefined = undefined;
 
@@ -131,10 +169,8 @@ export function resolvePackageModule(
     moduleRef.scope ? moduleRef.scope + "/" + moduleRef.name : moduleRef.name,
     searchDir
   );
-  const pkgDir = io.findPackageDependencyDir(moduleRef, {
-    startDir: searchDir,
-    // TODO: stopDir ==> workspace root? security & perf
-  });
+  const pkgDir = findPackageDependencyDir(context, moduleRef, searchDir);
+  // TODO: stopDir ==> workspace root? security & perf
   if (pkgDir) {
     log.log("Loading module from external package '%s'.", pkgDir);
 

@@ -5,6 +5,7 @@ import {
   getReactNativePlatformPackageName,
   createReactNativePackageNameReplacer,
 } from "../src/react-native-package-name";
+import type { ResolverContext } from "../src/types";
 
 describe("React-Native Package Name > getReactNativePlatformPackageName", () => {
   test("returns Windows out-of-tree package", () => {
@@ -30,7 +31,7 @@ describe("React-Native Package Name > createReactNativePackageNameReplacer > Dis
   test("returns the input module without substitution", () => {
     const replacer = createReactNativePackageNameReplacer(
       "windows",
-      false,
+      true,
       new ResolverLog(ResolverLogMode.Never)
     );
     expect(replacer("react-native")).toEqual("react-native");
@@ -42,7 +43,7 @@ describe("React-Native Package Name > createReactNativePackageNameReplacer > In-
   test("returns the input module without substitution", () => {
     const replacer = createReactNativePackageNameReplacer(
       "ios",
-      true,
+      false,
       new ResolverLog(ResolverLogMode.Never)
     );
     expect(replacer("react-native")).toEqual("react-native");
@@ -58,7 +59,7 @@ describe("React-Native Package Name > createReactNativePackageNameReplacer > Out
 
   const replacer = createReactNativePackageNameReplacer(
     "windows",
-    true,
+    false,
     resolverLog as ResolverLog
   );
 

@@ -24,7 +24,7 @@ export function searchForModuleFile(
   for (const pext of [...context.platformExtensions, ""]) {
     for (const fext of extensions) {
       const p = path.join(searchDir, `${modulePath}${pext}${fext}`);
-      if (context.io.isFile(p)) {
+      if (context.host.fileExists(p)) {
         return {
           resolvedFileName: p,
           extension: fext,
@@ -79,7 +79,7 @@ export function findModuleFile(
 ): ts.ResolvedModuleFull | undefined {
   // TODO: security: if join(searchDir, modulePath) takes you outside of searchDir, return undefined without touching the disk
 
-  const { io } = context;
+  const { host } = context;
 
   //
   //  See if the module path has an extension that is in the list. If it
@@ -89,7 +89,7 @@ export function findModuleFile(
   const extension = getExtensionFromPath(modulePath);
   if (extension && extensions.includes(extension)) {
     const p = path.join(searchDir, modulePath);
-    return io.isFile(p) ? { resolvedFileName: p, extension } : undefined;
+    return host.fileExists(p) ? { resolvedFileName: p, extension } : undefined;
   }
 
   let module = searchForModuleFile(context, searchDir, modulePath, extensions);
@@ -120,7 +120,7 @@ export function findModuleFile(
     //  The module was not found, but it may refer to a directory name.
     //  If so, search within that directory for a module named "index".
     //
-    if (io.isDirectory(path.join(searchDir, modulePath))) {
+    if (host.directoryExists(path.join(searchDir, modulePath))) {
       module = findModuleFile(
         context,
         path.join(searchDir, modulePath),

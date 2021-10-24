@@ -4,13 +4,21 @@ import ts from "typescript";
 
 import { findModuleFile } from "../src/module";
 import { ResolverLog, ResolverLogMode } from "../src/log";
-import { createLoggedIO } from "../src/io";
-import type { ResolverContext } from "../src/types";
+import type { ResolverContext, ModuleResolutionHostLike } from "../src/types";
 
+const host: ModuleResolutionHostLike = {
+  fileExists: ts.sys.fileExists,
+  readFile: ts.sys.readFile,
+  trace: (s: string) => {
+    // nop
+  },
+  directoryExists: ts.sys.directoryExists,
+  realpath: ts.sys.realpath,
+  getDirectories: ts.sys.getDirectories,
+};
 const log = new ResolverLog(ResolverLogMode.Never);
-const io = createLoggedIO(log);
 const platformExtensions = [".ios", ".native"];
-const context: ResolverContext = { log, io, platformExtensions };
+const context: ResolverContext = { host, log, platformExtensions };
 
 const fixturePath = path.join(
   process.cwd(),

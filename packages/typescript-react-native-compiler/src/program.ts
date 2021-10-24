@@ -1,4 +1,4 @@
-import { ReactNativeResolverHost } from "@rnx-kit/typescript-react-native-resolver";
+import { changeCompilerHostToUseReactNativeResolver } from "@rnx-kit/typescript-react-native-resolver";
 import fs from "fs";
 import os from "os";
 import ts from "typescript";
@@ -27,15 +27,15 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
 
   const compilerHost = ts.createCompilerHost(cmdLine.ts.options);
 
-  // TODO: needed?
-  // changeCompilerHostLikeToUseCache -- assuming this is only an optimization
+  // ts.changeCompilerHostLikeToUseCache
+  // TODO: changeCompilerHostToUseCache(compilerHost);
 
   if (platform) {
     //  A react-native target platform was specified. Use the react-native
     //  TypeScript resolver. Route module resolution trace message to the
     //  react-native resolver.
     //
-    const resolverHost = new ReactNativeResolverHost(
+    changeCompilerHostToUseReactNativeResolver(
       compilerHost,
       cmdLine.ts.options,
       platform,
@@ -44,12 +44,6 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
       !!traceReactNativeModuleResolutionErrors,
       traceResolutionLog
     );
-
-    compilerHost.resolveModuleNames =
-      resolverHost.resolveModuleNames.bind(resolverHost);
-    compilerHost.resolveTypeReferenceDirectives =
-      resolverHost.resolveTypeReferenceDirectives.bind(resolverHost);
-    compilerHost.trace = resolverHost.trace.bind(resolverHost);
   } else {
     //  No react-native platform was specified. Use the standard TypeScript
     //  resolver. Route module resolution trace messages to a file or to

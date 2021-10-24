@@ -1,239 +1,239 @@
+// TODO: move 2 resolve methods to resolve.ts and add tests
+
+// TODO: rename file to host.ts and add tests
+
+// TODO: find other areas where you depend on tools-node or fs and replace with calls through host
+//       all I/O must be logged (outer layer) and cached (inner layer)
+
 import {
   isFileModuleRef,
   isPackageModuleRef,
   parseModuleRef,
 } from "@rnx-kit/tools-node";
-import {
-  createDefaultResolverHost,
-  ResolverHost,
-} from "@rnx-kit/typescript-service";
 import { builtinModules } from "module";
 import path from "path";
 import ts from "typescript";
-import { getWorkspaces, WorkspaceInfo } from "workspace-tools";
+import { getWorkspaces } from "workspace-tools";
 
 import { ExtensionsTypeScript, hasExtension } from "./extension";
-import { createLoggedIO } from "./io";
-import { ResolverLog, ResolverLogMode } from "./log";
+import {
+  ResolverLog,
+  ResolverLogMode,
+  changeModuleResolutionHostToLogFileSystemReads,
+} from "./log";
 import { createReactNativePackageNameReplacer } from "./react-native-package-name";
 import {
   resolveFileModule,
   resolvePackageModule,
   resolveWorkspaceModule,
 } from "./resolve";
-import type { ResolverContext } from "./types";
+import type { ResolverContext, ModuleResolutionHostLike } from "./types";
 import { queryWorkspaceModuleRef } from "./workspace";
 
 /**
- * Implementation of ResolverHost for use with react-native applications.
+ * Change the TypeScript `CompilerHost` implementation so it makes use of
+ * react-native module resolution.
+ *
+ * This includes binding the `trace` method to a react-native trace logger.
+ * The logger is active when the compiler option `traceResolution` is true, or
+ * when react-native error tracing is enabled. All file and directory reads
+ * are logged, making it easy to see what the resolver is doing.
+ *
+ * @param host Compiler host
+ * @param options Compiler options
+ * @param platform Target platform
+ * @param platformExtensionNames Optional list of platform file extensions, from highest precedence (index 0) to lowest. Example: `["ios", "mobile", "native"]`.
+ * @param disableReactNativePackageSubstitution Flag to prevent substituting the module name `react-native` with the target platform's out-of-tree NPM package implementation. For example, on Windows, devs expect `react-native` to implicitly refer to `react-native-windows`.
+ * @param traceReactNativeModuleResolutionErrors Flag to enable trace logging when a resolver error occurs. All messages involved in the failed module resolution are aggregated and logged.
+ * @param traceResolutionLog Optional file to use for logging trace message. When not present, log messages go to the console.
  */
-export class ReactNativeResolverHost {
-  private options: ts.ParsedCommandLine["options"];
-  private platform: string;
-  private disableReactNativePackageSubstitution: boolean;
+export function changeCompilerHostToUseReactNativeResolver(
+  host: ts.CompilerHost,
+  options: ts.ParsedCommandLine["options"],
+  platform: string,
+  platformExtensionNames: string[] | undefined,
+  disableReactNativePackageSubstitution: boolean,
+  traceReactNativeModuleResolutionErrors: boolean,
+  traceResolutionLog: string | undefined
+): void {
+  let mode = ResolverLogMode.Never;
+  if (options.traceResolution) {
+    mode = ResolverLogMode.Always;
+  } else if (traceReactNativeModuleResolutionErrors) {
+    mode = ResolverLogMode.OnFailure;
+  }
+  const log = new ResolverLog(mode, traceResolutionLog);
+  host.trace = log.log.bind(log);
 
-  private resolverLog: ResolverLog;
-  private defaultResolverHost: ResolverHost;
+  // Ensure that optional methods have an implementation so they can be hooked
+  // for logging.
+  host.directoryExists = host.directoryExists ?? ts.sys.directoryExists;
+  host.realpath = host.realpath ?? ts.sys.realpath;
+  host.getDirectories = host.getDirectories ?? ts.sys.getDirectories;
 
-  private replaceReactNativePackageName: (m: string) => string;
+  changeModuleResolutionHostToLogFileSystemReads(
+    host as ModuleResolutionHostLike
+  );
 
-  private context: ResolverContext;
-
-  private workspaces: WorkspaceInfo;
-
-  private allowedExtensions: ts.Extension[];
-
-  constructor(
-    moduleResolutionHost: ts.ModuleResolutionHost,
-    options: ts.ParsedCommandLine["options"],
-    platform: string,
-    platformExtensions: string[] | undefined,
-    disableReactNativePackageSubstitution: boolean,
-    traceReactNativeModuleResolutionErrors: boolean,
-    traceResolutionLog: string | undefined
-  ) {
-    this.platform = platform;
-    this.disableReactNativePackageSubstitution =
-      disableReactNativePackageSubstitution;
-    this.options = options;
-
-    let mode = ResolverLogMode.Never;
-    if (this.options.traceResolution) {
-      mode = ResolverLogMode.Always;
-    } else if (traceReactNativeModuleResolutionErrors) {
-      mode = ResolverLogMode.OnFailure;
-    }
-    this.resolverLog = new ResolverLog(mode, traceResolutionLog);
-    this.defaultResolverHost = createDefaultResolverHost(
-      options,
-      moduleResolutionHost
-    );
-
-    //
-    //  React-native package name replacement is currently controlled by a
-    //  command-line option because the windows and mac platforms
-    //  (react-native-windows, react-native-macos) don't yet support it.
-    //
-    //  react-native-windows doesn't export a complete set of react-native
-    //  types, leading to errors about missing names like 'AppRegistry'
-    //  and 'View':
-    //
-    //       https://github.com/microsoft/react-native-windows/issues/8627
-    //
-    //  react-native-macos doesn't export types, instead relying on the
-    //  in-tree types for ios.
-    //
-    this.replaceReactNativePackageName = createReactNativePackageNameReplacer(
-      this.platform,
-      !this.disableReactNativePackageSubstitution,
-      this.resolverLog
-    );
-
-    this.context = {
-      io: createLoggedIO(this.resolverLog),
-      log: this.resolverLog,
-      platformExtensions: [this.platform, ...(platformExtensions || [])].map(
-        (e) => `.${e}` // prepend a '.' to each platform extension
-      ),
-    };
-
-    this.workspaces = getWorkspaces(process.cwd());
-
-    this.allowedExtensions = [...ExtensionsTypeScript];
-    if (this.options.checkJs) {
-      this.allowedExtensions.push(ts.Extension.Js, ts.Extension.Jsx);
-    }
-    if (this.options.resolveJsonModule) {
-      this.allowedExtensions.push(ts.Extension.Json);
-    }
+  const allowedExtensions = [...ExtensionsTypeScript];
+  if (options.checkJs) {
+    allowedExtensions.push(ts.Extension.Js, ts.Extension.Jsx);
+  }
+  if (options.resolveJsonModule) {
+    allowedExtensions.push(ts.Extension.Json);
   }
 
-  resolveModuleNames(
-    moduleNames: string[],
-    containingFile: string,
-    _reusedNames: string[] | undefined,
-    _redirectedReference?: ts.ResolvedProjectReference
-  ): (ts.ResolvedModuleFull | undefined)[] {
+  const context: ResolverContext = {
+    host: host as ModuleResolutionHostLike,
+    options,
+    disableReactNativePackageSubstitution,
+    log,
+    platform,
+    platformExtensions: [platform, ...(platformExtensionNames || [])].map(
+      (e) => `.${e}` // prepend a '.' to each name to make it a file extension
+    ),
+    workspaces: getWorkspaces(process.cwd()),
+    allowedExtensions,
+    replaceReactNativePackageName: createReactNativePackageNameReplacer(
+      platform,
+      disableReactNativePackageSubstitution,
+      log
+    ),
+  };
+
+  host.resolveModuleNames = resolveModuleNames.bind(undefined, context);
+  host.resolveTypeReferenceDirectives = resolveTypeReferenceDirectives.bind(
+    undefined,
+    context
+  );
+}
+
+export function resolveModuleNames(
+  context: ResolverContext,
+  moduleNames: string[],
+  containingFile: string,
+  _reusedNames: string[] | undefined,
+  _redirectedReference?: ts.ResolvedProjectReference
+): (ts.ResolvedModuleFull | undefined)[] {
+  const { log, workspaces, allowedExtensions, replaceReactNativePackageName } =
+    context;
+
+  //
+  //  If the containing file is a type file (.d.ts), it can only import
+  //  other type files. Search for both .d.ts and .ts files, as some
+  //  modules import as "foo.d" with the intent to resolve to "foo.d.ts".
+  //
+  const extensions = hasExtension(containingFile, ts.Extension.Dts)
+    ? [ts.Extension.Dts, ts.Extension.Ts]
+    : allowedExtensions;
+
+  const resolutions: (ts.ResolvedModuleFull | undefined)[] = [];
+
+  for (let moduleName of moduleNames) {
+    log.begin();
+    log.log(
+      "======== Resolving module '%s' from '%s' ========",
+      moduleName,
+      containingFile
+    );
+
     //
-    //  If the containing file is a type file (.d.ts), it can only import
-    //  other type files. Search for both .d.ts and .ts files, as some
-    //  modules import as "foo.d" with the intent to resolve to "foo.d.ts".
+    //  Replace any reference to 'react-native' with the platform-specific
+    //  react-native package name.
     //
-    const extensions = hasExtension(containingFile, ts.Extension.Dts)
-      ? [ts.Extension.Dts, ts.Extension.Ts]
-      : this.allowedExtensions;
+    moduleName = replaceReactNativePackageName(moduleName);
 
-    const resolutions: (ts.ResolvedModuleFull | undefined)[] = [];
+    let module: ts.ResolvedModuleFull | undefined = undefined;
 
-    for (let moduleName of moduleNames) {
-      this.resolverLog.begin();
-      this.resolverLog.log(
-        "======== Resolving module '%s' from '%s' ========",
-        moduleName,
-        containingFile
-      );
-
-      //
-      //  Replace any reference to 'react-native' with the platform-specific
-      //  react-native package name.
-      //
-      moduleName = this.replaceReactNativePackageName(moduleName);
-
-      let module: ts.ResolvedModuleFull | undefined = undefined;
-
-      const workspaceRef = queryWorkspaceModuleRef(
-        this.workspaces,
-        moduleName,
-        containingFile
-      );
-      if (workspaceRef) {
-        module = resolveWorkspaceModule(this.context, workspaceRef, extensions);
-      } else {
-        const moduleRef = parseModuleRef(moduleName);
-        if (isPackageModuleRef(moduleRef)) {
-          module = resolvePackageModule(
-            this.context,
-            moduleRef,
-            path.dirname(containingFile),
-            extensions
-          );
-        } else if (isFileModuleRef(moduleRef)) {
-          module = resolveFileModule(
-            this.context,
-            moduleRef,
-            path.dirname(containingFile),
-            extensions
-          );
-        }
-      }
-
-      resolutions.push(module);
-      if (module) {
-        this.resolverLog.log(
-          "File %s exists - using it as a module resolution result.",
-          module.resolvedFileName
+    const workspaceRef = queryWorkspaceModuleRef(
+      workspaces,
+      moduleName,
+      containingFile
+    );
+    if (workspaceRef) {
+      module = resolveWorkspaceModule(context, workspaceRef, extensions);
+    } else {
+      const moduleRef = parseModuleRef(moduleName);
+      if (isPackageModuleRef(moduleRef)) {
+        module = resolvePackageModule(
+          context,
+          moduleRef,
+          path.dirname(containingFile),
+          extensions
         );
-        this.resolverLog.log(
-          "======== Module name '%s' was successfully resolved to '%s' ========",
-          moduleName,
-          module.resolvedFileName
+      } else if (isFileModuleRef(moduleRef)) {
+        module = resolveFileModule(
+          context,
+          moduleRef,
+          path.dirname(containingFile),
+          extensions
         );
-        this.resolverLog.endSuccess();
-      } else {
-        this.resolverLog.log(
-          "Failed to resolve module %s to a file.",
-          moduleName
-        );
-        this.resolverLog.log(
-          "======== Module name '%s' failed to resolve to a file ========",
-          moduleName
-        );
-        if (
-          this.resolverLog.getMode() !== ResolverLogMode.Never &&
-          shouldShowResolverFailure(moduleName)
-        ) {
-          this.resolverLog.endFailure();
-        } else {
-          this.resolverLog.reset();
-        }
       }
     }
 
-    return resolutions;
-  }
-
-  getResolvedModuleWithFailedLookupLocationsFromCache(
-    moduleName: string,
-    containingFile: string
-  ): ts.ResolvedModuleWithFailedLookupLocations | undefined {
-    this.resolverLog.begin();
-    const resolution =
-      this.defaultResolverHost.getResolvedModuleWithFailedLookupLocationsFromCache(
-        moduleName,
-        containingFile
+    resolutions.push(module);
+    if (module) {
+      log.log(
+        "File %s exists - using it as a module resolution result.",
+        module.resolvedFileName
       );
-    this.resolverLog.endSuccess();
-    return resolution;
+      log.log(
+        "======== Module name '%s' was successfully resolved to '%s' ========",
+        moduleName,
+        module.resolvedFileName
+      );
+      log.endSuccess();
+    } else {
+      log.log("Failed to resolve module %s to a file.", moduleName);
+      log.log(
+        "======== Module name '%s' failed to resolve to a file ========",
+        moduleName
+      );
+      if (
+        log.getMode() !== ResolverLogMode.Never &&
+        shouldShowResolverFailure(moduleName)
+      ) {
+        log.endFailure();
+      } else {
+        log.reset();
+      }
+    }
   }
 
-  resolveTypeReferenceDirectives(
-    typeDirectiveNames: string[],
-    containingFile: string,
-    redirectedReference?: ts.ResolvedProjectReference
-  ): (ts.ResolvedTypeReferenceDirective | undefined)[] {
-    this.resolverLog.begin();
-    const resolutions = this.defaultResolverHost.resolveTypeReferenceDirectives(
-      typeDirectiveNames,
-      containingFile,
-      redirectedReference
-    );
-    this.resolverLog.endSuccess();
-    return resolutions;
+  return resolutions;
+}
+
+export function resolveTypeReferenceDirectives(
+  context: ResolverContext,
+  typeDirectiveNames: string[],
+  containingFile: string,
+  redirectedReference?: ts.ResolvedProjectReference
+): (ts.ResolvedTypeReferenceDirective | undefined)[] {
+  const { host, options, log } = context;
+
+  const resolutions: (ts.ResolvedTypeReferenceDirective | undefined)[] = [];
+
+  for (const typeDirectiveName of typeDirectiveNames) {
+    log.begin();
+
+    const { resolvedTypeReferenceDirective: directive } =
+      ts.resolveTypeReferenceDirective(
+        typeDirectiveName,
+        containingFile,
+        options,
+        host,
+        redirectedReference
+      );
+
+    resolutions.push(directive);
+    if (directive) {
+      log.endSuccess();
+    } else {
+      log.endFailure();
+    }
   }
 
-  trace(message: string): void {
-    this.resolverLog.log(message);
-  }
+  return resolutions;
 }
 
 /**
