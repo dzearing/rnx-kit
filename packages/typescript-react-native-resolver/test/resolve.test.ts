@@ -12,26 +12,26 @@ import {
 import type { ResolverContext, ModuleResolutionHostLike } from "../src/types";
 import type { WorkspaceModuleRef } from "../src/workspace";
 
-const host: ModuleResolutionHostLike = {
-  fileExists: ts.sys.fileExists,
-  readFile: ts.sys.readFile,
-  trace: (s: string) => {
-    // nop
-  },
-  directoryExists: ts.sys.directoryExists,
-  realpath: ts.sys.realpath,
-  getDirectories: ts.sys.getDirectories,
-};
 const mockLog = jest.fn();
-const resolverLog: unknown = {
-  log: mockLog,
-};
-const platformExtensions = [".ios", ".native"];
-const context: ResolverContext = {
-  host,
-  log: resolverLog as ResolverLog,
-  platformExtensions,
-};
+const context = {
+  host: {
+    fileExists: ts.sys.fileExists,
+    readFile: ts.sys.readFile,
+    trace: (s: string) => {
+      // nop
+    },
+    directoryExists: ts.sys.directoryExists,
+    realpath: ts.sys.realpath,
+    getDirectories: ts.sys.getDirectories,
+  },
+
+  log: {
+    log: mockLog,
+  } as unknown as ResolverLog,
+
+  platformExtensions: [".ios", ".native"],
+} as unknown as ResolverContext;
+
 const extensions = [ts.Extension.Ts, ts.Extension.Tsx, ts.Extension.Dts];
 
 const fixturePath = path.join(

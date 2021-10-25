@@ -1,16 +1,16 @@
-// TODO: move 2 resolve methods to resolve.ts and add tests
-
-// TODO: rename file to host.ts and add tests
-
 // TODO: find other areas where you depend on tools-node or fs and replace with calls through host
 //       all I/O must be logged (outer layer) and cached (inner layer)
+
+// TODO: config.ts -- needed?
+// ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd
+
+// TODO: program.ts -- changeCompilerHostToUseCache(compilerHost);  // see ts.changeCompilerHostLikeToUseCache
 
 import {
   isFileModuleRef,
   isPackageModuleRef,
   parseModuleRef,
 } from "@rnx-kit/tools-node";
-import { builtinModules } from "module";
 import path from "path";
 import ts from "typescript";
 import { getWorkspaces } from "workspace-tools";
@@ -20,6 +20,8 @@ import {
   ResolverLog,
   ResolverLogMode,
   changeModuleResolutionHostToLogFileSystemReads,
+  logModuleBegin,
+  logModuleEnd,
 } from "./log";
 import { createReactNativePackageNameReplacer } from "./react-native-package-name";
 import {
@@ -108,6 +110,57 @@ export function changeCompilerHostToUseReactNativeResolver(
   );
 }
 
+/**
+ * Resolve a module for a TypeScript program. Prefer type (.d.ts) files and
+ * TypeScript source (.ts[x]) files, as they usually carry more type
+ * information than JavaScript source (.js[x]) files.
+ *
+ * @param context Resolver context
+ * @param moduleName Module name, as listed in the require/import statement
+ * @param containingFile File from which the module was required/imported
+ * @param extensions List of allowed file extensions to use when resolving the module to a file
+ * @returns Resolved module information, or `undefined` if resolution failed.
+ */
+export function resolveModuleName(
+  context: ResolverContext,
+  moduleName: string,
+  containingFile: string,
+  extensions: ts.Extension[]
+): ts.ResolvedModuleFull | undefined {
+  const { workspaces } = context;
+
+  const workspaceRef = queryWorkspaceModuleRef(
+    workspaces,
+    moduleName,
+    containingFile
+  );
+  if (workspaceRef) {
+    return resolveWorkspaceModule(context, workspaceRef, extensions);
+  }
+
+  const moduleRef = parseModuleRef(moduleName);
+  const searchDir = path.dirname(containingFile);
+  if (isPackageModuleRef(moduleRef)) {
+    return resolvePackageModule(context, moduleRef, searchDir, extensions);
+  } else if (isFileModuleRef(moduleRef)) {
+    return resolveFileModule(context, moduleRef, searchDir, extensions);
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolve a set of modules for a TypeScript program, all referenced from a
+ * single containing file. Prefer type (.d.ts) files and TypeScript source
+ * (.ts[x]) files, as they usually carry more type information than JavaScript
+ * source (.js[x]) files.
+ *
+ * @param context Resolver context
+ * @param moduleNames List of module names, as they appear in each require/import statement
+ * @param containingFile File from which the modules were all required/imported
+ * @param extensions List of allowed file extensions to use when resolving each module to a file
+ * @returns Array of results. Each entry will have resolved module information, or will be `undefined` if resolution failed. The array will have one element for each entry in the module name list.
+ */
 export function resolveModuleNames(
   context: ResolverContext,
   moduleNames: string[],
@@ -115,8 +168,7 @@ export function resolveModuleNames(
   _reusedNames: string[] | undefined,
   _redirectedReference?: ts.ResolvedProjectReference
 ): (ts.ResolvedModuleFull | undefined)[] {
-  const { log, workspaces, allowedExtensions, replaceReactNativePackageName } =
-    context;
+  const { log, allowedExtensions, replaceReactNativePackageName } = context;
 
   //
   //  If the containing file is a type file (.d.ts), it can only import
@@ -129,80 +181,43 @@ export function resolveModuleNames(
 
   const resolutions: (ts.ResolvedModuleFull | undefined)[] = [];
 
-  for (let moduleName of moduleNames) {
-    log.begin();
-    log.log(
-      "======== Resolving module '%s' from '%s' ========",
-      moduleName,
-      containingFile
+  for (const moduleName of moduleNames) {
+    logModuleBegin(log, moduleName, containingFile);
+
+    const module = resolveModuleName(
+      context,
+      replaceReactNativePackageName(moduleName),
+      containingFile,
+      extensions
     );
-
-    //
-    //  Replace any reference to 'react-native' with the platform-specific
-    //  react-native package name.
-    //
-    moduleName = replaceReactNativePackageName(moduleName);
-
-    let module: ts.ResolvedModuleFull | undefined = undefined;
-
-    const workspaceRef = queryWorkspaceModuleRef(
-      workspaces,
-      moduleName,
-      containingFile
-    );
-    if (workspaceRef) {
-      module = resolveWorkspaceModule(context, workspaceRef, extensions);
-    } else {
-      const moduleRef = parseModuleRef(moduleName);
-      if (isPackageModuleRef(moduleRef)) {
-        module = resolvePackageModule(
-          context,
-          moduleRef,
-          path.dirname(containingFile),
-          extensions
-        );
-      } else if (isFileModuleRef(moduleRef)) {
-        module = resolveFileModule(
-          context,
-          moduleRef,
-          path.dirname(containingFile),
-          extensions
-        );
-      }
-    }
 
     resolutions.push(module);
-    if (module) {
-      log.log(
-        "File %s exists - using it as a module resolution result.",
-        module.resolvedFileName
-      );
-      log.log(
-        "======== Module name '%s' was successfully resolved to '%s' ========",
-        moduleName,
-        module.resolvedFileName
-      );
-      log.endSuccess();
-    } else {
-      log.log("Failed to resolve module %s to a file.", moduleName);
-      log.log(
-        "======== Module name '%s' failed to resolve to a file ========",
-        moduleName
-      );
-      if (
-        log.getMode() !== ResolverLogMode.Never &&
-        shouldShowResolverFailure(moduleName)
-      ) {
-        log.endFailure();
-      } else {
-        log.reset();
-      }
-    }
+    logModuleEnd(log, moduleName, module);
   }
 
   return resolutions;
 }
 
+/**
+ * Resolve a set of type references for a TypeScript program.
+ *
+ * A type reference typically originates from a triple-slash directive:
+ *
+ *    `/// <reference path="...">`
+ *    `/// <reference types="...">`
+ *    `/// <reference lib="...">`
+ *
+ * Type references also come from the `compilerOptions.types` property in
+ * `tsconfig.json`:
+ *
+ *    `types: ["node", "jest"]`
+ *
+ * @param context Resolver context
+ * @param typeDirectiveNames List of type names, as they appear in each type reference directive
+ * @param containingFile File from which the type names were all referenced
+ * @param redirectedReference Head node in the program's graph of type references
+ * @returns Array of results. Each entry will have resolved type information, or will be `undefined` if resolution failed. The array will have one element for each entry in the type name list.
+ */
 export function resolveTypeReferenceDirectives(
   context: ResolverContext,
   typeDirectiveNames: string[],
@@ -234,35 +249,4 @@ export function resolveTypeReferenceDirectives(
   }
 
   return resolutions;
-}
-
-/**
- * Decide whether or not to show failure information for the named module.
- *
- * @param moduleName Module
- */
-export function shouldShowResolverFailure(moduleName: string): boolean {
-  // ignore resolver errors for built-in node modules
-  if (
-    builtinModules.indexOf(moduleName) !== -1 ||
-    moduleName === "fs/promises" || // doesn't show up in the list, but it's a built-in
-    moduleName.toLowerCase().startsWith("node:") // explicit use of a built-in
-  ) {
-    return false;
-  }
-
-  // ignore resolver errors for multimedia files
-  const multimediaExts =
-    /\.(aac|aiff|bmp|caf|gif|html|jpeg|jpg|m4a|m4v|mov|mp3|mp4|mpeg|mpg|obj|otf|pdf|png|psd|svg|ttf|wav|webm|webp)$/i;
-  if (path.extname(moduleName).match(multimediaExts)) {
-    return false;
-  }
-
-  // ignore resolver errors for code files
-  const codeExts = /\.(css)$/i;
-  if (path.extname(moduleName).match(codeExts)) {
-    return false;
-  }
-
-  return true;
 }

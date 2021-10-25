@@ -1,5 +1,8 @@
 import fs from "fs";
+import { builtinModules } from "module";
 import os from "os";
+import path from "path";
+import ts from "typescript";
 import util from "util";
 
 import type { ModuleResolutionHostLike } from "./types";
@@ -140,4 +143,95 @@ export function changeModuleResolutionHostToLogFileSystemReads(
     }
     return result;
   };
+}
+
+/**
+ * Decide whether or not to log failure information for the named module.
+ *
+ * @param moduleName Module
+ */
+export function shouldLogResolverFailure(moduleName: string): boolean {
+  // ignore resolver errors for built-in node modules
+  if (
+    builtinModules.indexOf(moduleName) !== -1 ||
+    moduleName === "fs/promises" || // doesn't show up in the list, but it's a built-in
+    moduleName.toLowerCase().startsWith("node:") // explicit use of a built-in
+  ) {
+    return false;
+  }
+
+  // ignore resolver errors for multimedia files
+  const multimediaExts =
+    /\.(aac|aiff|bmp|caf|gif|html|jpeg|jpg|m4a|m4v|mov|mp3|mp4|mpeg|mpg|obj|otf|pdf|png|psd|svg|ttf|wav|webm|webp)$/i;
+  if (path.extname(moduleName).match(multimediaExts)) {
+    return false;
+  }
+
+  // ignore resolver errors for code files
+  const codeExts = /\.(css)$/i;
+  if (path.extname(moduleName).match(codeExts)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Start a logging session for resolving a single module.
+ *
+ * @param log Resolver log
+ * @param moduleName Module name
+ * @param containingFile File from which the module was required/imported.
+ */
+export function logModuleBegin(
+  log: ResolverLog,
+  moduleName: string,
+  containingFile: string
+): void {
+  log.begin();
+  log.log(
+    "======== Resolving module '%s' from '%s' ========",
+    moduleName,
+    containingFile
+  );
+}
+
+/**
+ * End a logging session for resolving a single module.
+ *
+ * @param log Resolver log
+ * @param moduleName Module name
+ * @param module Module resolution info, or `undefined` if resolution failed.
+ */
+export function logModuleEnd(
+  log: ResolverLog,
+  moduleName: string,
+  module: ts.ResolvedModuleFull | undefined
+): void {
+  if (module) {
+    log.log(
+      "File '%s' exists - using it as a module resolution result.",
+      module.resolvedFileName
+    );
+    log.log(
+      "======== Module name '%s' was successfully resolved to '%s' ========",
+      moduleName,
+      module.resolvedFileName
+    );
+    log.endSuccess();
+  } else {
+    log.log("Failed to resolve module %s to a file.", moduleName);
+    log.log(
+      "======== Module name '%s' failed to resolve to a file ========",
+      moduleName
+    );
+    if (
+      log.getMode() !== ResolverLogMode.Never &&
+      shouldLogResolverFailure(moduleName)
+    ) {
+      log.endFailure();
+    } else {
+      log.reset();
+    }
+  }
 }

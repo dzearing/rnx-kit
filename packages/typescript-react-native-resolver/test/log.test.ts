@@ -5,8 +5,12 @@ import {
   ResolverLogMode,
   ResolverLog,
   changeModuleResolutionHostToLogFileSystemReads,
+  shouldLogResolverFailure,
+  logModuleBegin,
+  logModuleEnd,
 } from "../src/log";
 import type { ModuleResolutionHostLike } from "../src/types";
+import ts from "typescript";
 
 const mockWriteFileSync = jest.fn();
 fs.writeFileSync = mockWriteFileSync;
@@ -204,5 +208,103 @@ describe("Log > changeModuleResolutionHostToLogFileSystemReads", () => {
       "sigma",
     ]);
     expect(mockTrace).toBeCalled();
+  });
+});
+
+describe("Log > shouldLogResolverFailure", () => {
+  test("returns false for node modules", () => {
+    expect(shouldLogResolverFailure("fs")).toBeFalse();
+    expect(shouldLogResolverFailure("path")).toBeFalse();
+    expect(shouldLogResolverFailure("fs/promises")).toBeFalse();
+    expect(shouldLogResolverFailure("node:util")).toBeFalse();
+  });
+
+  test("returns false for multimedia files", () => {
+    expect(shouldLogResolverFailure("picture.jpg")).toBeFalse();
+    expect(shouldLogResolverFailure("video.mpeg")).toBeFalse();
+    expect(shouldLogResolverFailure("song.mp3")).toBeFalse();
+    expect(shouldLogResolverFailure("page.html")).toBeFalse();
+    expect(shouldLogResolverFailure("font.ttf")).toBeFalse();
+  });
+
+  test("returns false for code files", () => {
+    expect(shouldLogResolverFailure("styles.css")).toBeFalse();
+  });
+
+  test("returns true for normal modules", () => {
+    expect(shouldLogResolverFailure("find-up")).toBeTrue();
+  });
+});
+
+const mockGetMode = jest.fn();
+const mockBegin = jest.fn();
+const mockLog = jest.fn();
+const mockEndSuccess = jest.fn();
+const mockEndFailure = jest.fn();
+const mockReset = jest.fn();
+
+const mockedResolverLog = {
+  getMode: mockGetMode,
+  begin: mockBegin,
+  log: mockLog,
+  endSuccess: mockEndSuccess,
+  endFailure: mockEndFailure,
+  reset: mockReset,
+} as unknown as ResolverLog;
+
+describe("Log > logModuleBegin", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  test("starts a new logging session", () => {
+    logModuleBegin(mockedResolverLog, "moduleName", "index.ts");
+    expect(mockBegin).toBeCalled();
+  });
+
+  test("logs a starting message", () => {
+    logModuleBegin(mockedResolverLog, "moduleName", "index.ts");
+    expect(mockLog).toBeCalled();
+  });
+});
+
+describe("Log > logModuleEnd", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  test("ends the current logging session successfully when the module was resolved", () => {
+    logModuleEnd(mockedResolverLog, "clippy", {
+      extension: ts.Extension.Ts,
+      resolvedFileName: "clippy.native.ts",
+    });
+    expect(mockEndSuccess).toBeCalled();
+    expect(mockEndFailure).not.toBeCalled();
+  });
+
+  test("logs an ending message when the module was resolved", () => {
+    logModuleEnd(mockedResolverLog, "clippy", {
+      extension: ts.Extension.Ts,
+      resolvedFileName: "clippy.native.ts",
+    });
+    expect(mockLog).toBeCalled();
+  });
+
+  test("ends the current logging session as a failure when the module was not resolved", () => {
+    logModuleEnd(mockedResolverLog, "bob", undefined);
+    expect(mockEndSuccess).not.toBeCalled();
+    expect(mockEndFailure).toBeCalled();
+  });
+
+  test("logs an ending message when the module was not resolved", () => {
+    logModuleEnd(mockedResolverLog, "bob", undefined);
+    expect(mockLog).toBeCalled();
+  });
+
+  test("resets the current logging session when the module resolution failure should not be reported", () => {
+    logModuleEnd(mockedResolverLog, "fs", undefined);
+    expect(mockEndSuccess).not.toBeCalled();
+    expect(mockEndFailure).not.toBeCalled();
+    expect(mockReset).toBeCalled();
   });
 });
