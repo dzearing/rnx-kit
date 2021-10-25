@@ -18,7 +18,7 @@ const host: ModuleResolutionHostLike = {
 };
 const log = new ResolverLog(ResolverLogMode.Never);
 const platformExtensions = [".ios", ".native"];
-const context: ResolverContext = { host, log, platformExtensions };
+const context = { host, log, platformExtensions } as unknown as ResolverContext;
 
 const fixturePath = path.join(
   process.cwd(),
@@ -32,6 +32,7 @@ function find(
   extensions: ts.Extension[] = [
     ts.Extension.Ts,
     ts.Extension.Tsx,
+    ts.Extension.Dts,
     ts.Extension.Js,
     ts.Extension.Jsx,
   ]
@@ -109,6 +110,12 @@ describe("Module > findModuleFile > Module: magenta.js", () => {
 describe("Module > findModuleFile > Module: emerald", () => {
   test("finds index.ts under emerald when emerald is a directory", () => {
     expect(find("emerald")).toEqual(pathOf("emerald", "index.ts"));
+  });
+});
+
+describe("Module > findModuleFile > Module: jade", () => {
+  test("uses types property from jade/package.json when jade is a directory", () => {
+    expect(find("jade")).toEqual(pathOf("jade", "enlightenment.d.ts"));
   });
 });
 

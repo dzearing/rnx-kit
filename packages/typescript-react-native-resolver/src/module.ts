@@ -2,6 +2,7 @@ import path from "path";
 import ts from "typescript";
 
 import { getExtensionFromPath } from "./extension";
+import { resolveModule } from "./resolve";
 import type { ResolverContext } from "./types";
 
 /**
@@ -118,15 +119,18 @@ export function findModuleFile(
   if (!module) {
     //
     //  The module was not found, but it may refer to a directory name.
-    //  If so, search within that directory for a module named "index".
+    //  If so, search within that directory.
     //
-    if (host.directoryExists(path.join(searchDir, modulePath))) {
-      module = findModuleFile(
-        context,
-        path.join(searchDir, modulePath),
-        "index",
-        extensions
-      );
+    const moduleDir = path.join(searchDir, modulePath);
+    if (host.directoryExists(moduleDir)) {
+      if (host.fileExists(path.join(moduleDir, "package.json"))) {
+        //  The module name refers to an embedded package. Start a new search
+        //  from the package root (e.g. the module directory).
+        module = resolveModule(context, moduleDir, undefined, extensions);
+      } else {
+        //  Search for an index file.
+        module = findModuleFile(context, moduleDir, "index", extensions);
+      }
     }
   }
 
