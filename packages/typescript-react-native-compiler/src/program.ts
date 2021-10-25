@@ -2,6 +2,7 @@ import { changeCompilerHostToUseReactNativeResolver } from "@rnx-kit/typescript-
 import fs from "fs";
 import os from "os";
 import ts from "typescript";
+import { changeModuleResolutionHostToUseReadCache } from "./cache";
 
 import type { CommandLine } from "./command-line";
 
@@ -27,13 +28,15 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
 
   const compilerHost = ts.createCompilerHost(cmdLine.ts.options);
 
-  // ts.changeCompilerHostLikeToUseCache
-  // TODO: changeCompilerHostToUseCache(compilerHost);
+  changeModuleResolutionHostToUseReadCache(
+    compilerHost
+    //!!cmdLine.ts.options.traceResolution
+  );
 
   if (platform) {
     //  A react-native target platform was specified. Use the react-native
-    //  TypeScript resolver. Route module resolution trace message to the
-    //  react-native resolver.
+    //  TypeScript resolver. This includes configuring a react-native trace
+    //  message handler.
     //
     changeCompilerHostToUseReactNativeResolver(
       compilerHost,
@@ -46,8 +49,11 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
     );
   } else {
     //  No react-native platform was specified. Use the standard TypeScript
-    //  resolver. Route module resolution trace messages to a file or to
-    //  the console.
+    //  resolver.
+    //
+    //  Add a trace message handler which writes to a file or to the console.
+    //  Trace messages are only used when the compiler option `traceResolution`
+    //  is enabled.
     //
     if (traceResolutionLog) {
       compilerHost.trace = (message: string): void => {
@@ -71,5 +77,11 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
     ),
   };
   const program = ts.createProgram(programOptions);
+
+  // (program as unknown as Record<string, unknown>).dumpCacheStats = () => {
+  //   // eslint-disable-next-line
+  //   (compilerHost as unknown as any).dumpCacheStats();
+  // };
+
   return program;
 }

@@ -4,7 +4,7 @@
 // TODO: config.ts -- needed?
 // ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd
 
-// TODO: program.ts -- changeCompilerHostToUseCache(compilerHost);  // see ts.changeCompilerHostLikeToUseCache
+// TODO: remove cache stats and dump-stats calls
 
 import {
   isFileModuleRef,
@@ -229,7 +229,18 @@ export function resolveTypeReferenceDirectives(
   const resolutions: (ts.ResolvedTypeReferenceDirective | undefined)[] = [];
 
   for (const typeDirectiveName of typeDirectiveNames) {
-    log.begin();
+    // TypeScript only emits trace messages when traceResolution is enabled.
+    // Our code, however, can emit even when traceResolution is disabled. We
+    // have the "emit only errors" mode. This includes the file-system reads
+    // we hooked on the module-resolution host.
+    //
+    // We don't want to see those file-system read messages without the
+    // larger context of TypeScript's trace messages. So, for type directives,
+    // we can only log successes AND failures when traceResolution is enabled.
+    //
+    if (options.traceResolution) {
+      log.begin();
+    }
 
     const { resolvedTypeReferenceDirective: directive } =
       ts.resolveTypeReferenceDirective(
@@ -241,10 +252,12 @@ export function resolveTypeReferenceDirectives(
       );
 
     resolutions.push(directive);
-    if (directive) {
-      log.endSuccess();
-    } else {
-      log.endFailure();
+    if (options.traceResolution) {
+      if (directive) {
+        log.endSuccess();
+      } else {
+        log.endFailure();
+      }
     }
   }
 

@@ -35,11 +35,8 @@ export class ResolverLog {
   }
 
   log(format: string, ...args: string[]): void {
-    if (this.mode !== ResolverLogMode.Never) {
+    if (this.mode !== ResolverLogMode.Never && this.buffering) {
       this.messages.push(util.format(format, ...args));
-      if (!this.buffering) {
-        this.endSuccess();
-      }
     }
   }
 
@@ -68,14 +65,16 @@ export class ResolverLog {
   }
 
   private flush(): void {
-    const messages = this.messages.join(os.EOL);
-    if (this.logFile) {
-      fs.writeFileSync(this.logFile, messages + os.EOL, {
-        encoding: "utf-8",
-        flag: "a",
-      });
-    } else {
-      console.log(messages);
+    if (this.messages.length > 0) {
+      const messages = this.messages.join(os.EOL);
+      if (this.logFile) {
+        fs.writeFileSync(this.logFile, messages + os.EOL, {
+          encoding: "utf-8",
+          flag: "a",
+        });
+      } else {
+        console.log(messages);
+      }
     }
   }
 }
@@ -128,7 +127,7 @@ export function changeModuleResolutionHostToLogFileSystemReads(
     host.realpath = (path: string): string => {
       const result = originalRealpath(path);
       if (result && host.trace) {
-        host.trace(`Real path of '${path}' is 'result'.`);
+        host.trace(`Real path of '${path}' is '${result}'.`);
       }
       return result;
     };

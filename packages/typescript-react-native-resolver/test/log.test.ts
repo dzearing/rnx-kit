@@ -28,10 +28,10 @@ describe("Log > ResolverLog", () => {
     expect(log.getMode()).toEqual(ResolverLogMode.Always);
   });
 
-  test("log messages are flushed immediately when begin hasn't been called", () => {
+  test("log messages are ignored when begin hasn't been called", () => {
     const log = new ResolverLog(ResolverLogMode.Always);
     log.log("test");
-    expect(mockConsoleLog).toBeCalledWith("test");
+    expect(mockConsoleLog).not.toBeCalled();
   });
 
   test("log messages are buffered between a call to begin and a call to endSuccess", () => {
@@ -72,7 +72,9 @@ describe("Log > ResolverLog", () => {
 
   test("log messages are flushed to a file instead of the console", () => {
     const log = new ResolverLog(ResolverLogMode.Always, "foo.log");
+    log.begin();
     log.log("test");
+    log.endSuccess();
     expect(mockWriteFileSync).toBeCalledWith(
       "foo.log",
       expect.anything(),
