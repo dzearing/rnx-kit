@@ -24,7 +24,7 @@
     "node": ">= 10.12"
   },
   "dependencies": {
-    "@rnx-kit/tools-language": "^1.1.1",
+    "@rnx-kit/tools-language": "^1.1.1-1jstest.20",
     "chalk": "^4.1.0",
     "cp-file": "^9.1.0",
     "make-dir": "^3.1.0"
