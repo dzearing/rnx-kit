@@ -28,10 +28,7 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
 
   const compilerHost = ts.createCompilerHost(cmdLine.ts.options);
 
-  changeModuleResolutionHostToUseReadCache(
-    compilerHost
-    //!!cmdLine.ts.options.traceResolution
-  );
+  changeModuleResolutionHostToUseReadCache(compilerHost);
 
   if (platform) {
     //  A react-native target platform was specified. Use the react-native
@@ -77,11 +74,5 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
     ),
   };
   const program = ts.createProgram(programOptions);
-
-  // (program as unknown as Record<string, unknown>).dumpCacheStats = () => {
-  //   // eslint-disable-next-line
-  //   (compilerHost as unknown as any).dumpCacheStats();
-  // };
-
   return program;
 }

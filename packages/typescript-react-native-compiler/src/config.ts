@@ -93,9 +93,6 @@ export function tryReadTsConfigFile(
       cmdLine.ts.watchOptions
     );
 
-    // TODO: needed?
-    // ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd
-
     return parsedConfig;
   }
 

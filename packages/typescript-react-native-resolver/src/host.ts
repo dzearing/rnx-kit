@@ -1,11 +1,3 @@
-// TODO: find other areas where you depend on tools-node or fs and replace with calls through host
-//       all I/O must be logged (outer layer) and cached (inner layer)
-
-// TODO: config.ts -- needed?
-// ts.convertToOptionsWithAbsolutePaths -- create new ParsedCommandLine with all path props made absolute using the cwd
-
-// TODO: remove cache stats and dump-stats calls
-
 import {
   isFileModuleRef,
   isPackageModuleRef,

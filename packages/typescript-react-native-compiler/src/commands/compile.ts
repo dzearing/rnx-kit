@@ -54,7 +54,4 @@ export function compile(cmdLine: CommandLine): void {
       );
     }
   }
-
-  // // eslint-disable-next-line
-  // (program as unknown as any).dumpCacheStats();
 }
