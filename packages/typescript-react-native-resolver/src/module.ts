@@ -124,8 +124,8 @@ export function findModuleFile(
     const moduleDir = path.join(searchDir, modulePath);
     if (host.directoryExists(moduleDir)) {
       if (host.fileExists(path.join(moduleDir, "package.json"))) {
-        //  The module name refers to an embedded package. Start a new search
-        //  from the package root (e.g. the module directory).
+        //  The module path refers to a directory containing an embedded
+        //  package. Start a new search from the module path (package root).
         module = resolveModule(context, moduleDir, undefined, extensions);
       } else {
         //  Search for an index file.

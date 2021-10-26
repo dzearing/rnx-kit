@@ -3,7 +3,6 @@ import {
   getMangledPackageName,
   PackageModuleRef,
 } from "@rnx-kit/tools-node";
-import isString from "lodash/isString";
 import path from "path";
 import ts from "typescript";
 
@@ -57,15 +56,15 @@ export function resolveModule(
   //  Only consult 'types' and 'typings' properties when looking for
   //  type files (.d.ts).
   if (extensions.includes(ts.Extension.Dts)) {
-    if (isString(types)) {
+    if (typeof types === "string" && types.length > 0) {
       log.log("Package has 'types' field '%s'.", types);
       module = findModuleFile(context, packageDir, types, extensions);
-    } else if (isString(typings)) {
+    } else if (typeof typings === "string" && typings.length > 0) {
       log.log("Package has 'typings' field '%s'.", typings);
       module = findModuleFile(context, packageDir, typings, extensions);
     }
   }
-  if (!module && isString(main)) {
+  if (!module && typeof main === "string" && main.length > 0) {
     log.log("Package has 'main' field '%s'.", main);
     module = findModuleFile(context, packageDir, main, extensions);
   }
