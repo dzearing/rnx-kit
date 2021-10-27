@@ -5,6 +5,8 @@ import {
 } from "@rnx-kit/tools-node";
 import path from "path";
 import ts from "typescript";
+
+// TODO: remove all of the workspaces stuff including dependencies
 import { getWorkspaces } from "workspace-tools";
 
 import { ExtensionsTypeScript, hasExtension } from "./extension";
@@ -16,13 +18,8 @@ import {
   logModuleEnd,
 } from "./log";
 import { createReactNativePackageNameReplacer } from "./react-native-package-name";
-import {
-  resolveFileModule,
-  resolvePackageModule,
-  resolveWorkspaceModule,
-} from "./resolve";
+import { resolveFileModule, resolvePackageModule } from "./resolve";
 import type { ResolverContext, ModuleResolutionHostLike } from "./types";
-import { queryWorkspaceModuleRef } from "./workspace";
 
 /**
  * Change the TypeScript `CompilerHost` implementation so it makes use of
@@ -119,26 +116,31 @@ export function resolveModuleName(
   containingFile: string,
   extensions: ts.Extension[]
 ): ts.ResolvedModuleFull | undefined {
-  const { workspaces } = context;
-
-  const workspaceRef = queryWorkspaceModuleRef(
-    workspaces,
-    moduleName,
-    containingFile
-  );
-  if (workspaceRef) {
-    return resolveWorkspaceModule(context, workspaceRef, extensions);
-  }
+  let module: ts.ResolvedModuleFull | undefined = undefined;
 
   const moduleRef = parseModuleRef(moduleName);
   const searchDir = path.dirname(containingFile);
   if (isPackageModuleRef(moduleRef)) {
-    return resolvePackageModule(context, moduleRef, searchDir, extensions);
+    module = resolvePackageModule(context, moduleRef, searchDir, extensions);
   } else if (isFileModuleRef(moduleRef)) {
-    return resolveFileModule(context, moduleRef, searchDir, extensions);
+    module = resolveFileModule(context, moduleRef, searchDir, extensions);
+  }
+  if (module) {
+    module.isExternalLibraryImport =
+      module.resolvedFileName.indexOf("/node_modules/") !== -1;
+
+    const { host, options } = context;
+    if (host.realpath && !options.preserveSymlinks) {
+      const resolvedFileName = host.realpath(module.resolvedFileName);
+      const originalPath =
+        resolvedFileName === module.resolvedFileName
+          ? undefined
+          : module.resolvedFileName;
+      Object.assign({}, module, { resolvedFileName, originalPath });
+    }
   }
 
-  return undefined;
+  return module;
 }
 
 /**
