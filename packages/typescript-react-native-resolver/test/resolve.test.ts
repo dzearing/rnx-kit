@@ -5,12 +5,10 @@ import ts from "typescript";
 import { ResolverLog } from "../src/log";
 import {
   resolveModule,
-  resolveWorkspaceModule,
   resolvePackageModule,
   resolveFileModule,
 } from "../src/resolve";
-import type { ResolverContext, ModuleResolutionHostLike } from "../src/types";
-import type { WorkspaceModuleRef } from "../src/workspace";
+import type { ResolverContext } from "../src/types";
 
 const mockLog = jest.fn();
 const context = {
@@ -83,30 +81,6 @@ describe("Resolve > resolveModule", () => {
 
   test("resolves module nitrogen using index", () => {
     resolveTest(pathOf("nitrogen"), pathOf("nitrogen", "index.ts"));
-  });
-});
-
-describe("Resolve > resolveWorkspaceModule", () => {
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  test("resolves oxygen workspace to its default module", () => {
-    const workspaceModuleRef = {
-      workspace: {
-        name: "oxygen",
-        path: pathOf("oxygen"),
-      } as WorkspaceModuleRef["workspace"],
-    };
-
-    const result = resolveWorkspaceModule(
-      context,
-      workspaceModuleRef,
-      extensions
-    );
-    expect(result).not.toBeNil();
-    expect(result.resolvedFileName).toEqual(pathOf("oxygen", "index.ts"));
-    expect(mockLog).toBeCalled();
   });
 });
 

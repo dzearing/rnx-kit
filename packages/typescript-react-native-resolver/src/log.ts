@@ -147,9 +147,13 @@ export function changeModuleResolutionHostToLogFileSystemReads(
 /**
  * Decide whether or not to log failure information for the named module.
  *
+ * @param options TypeScript compiler options
  * @param moduleName Module
  */
-export function shouldLogResolverFailure(moduleName: string): boolean {
+export function shouldLogResolverFailure(
+  options: ts.ParsedCommandLine["options"],
+  moduleName: string
+): boolean {
   // ignore resolver errors for built-in node modules
   if (
     builtinModules.indexOf(moduleName) !== -1 ||
@@ -157,6 +161,13 @@ export function shouldLogResolverFailure(moduleName: string): boolean {
     moduleName.toLowerCase().startsWith("node:") // explicit use of a built-in
   ) {
     return false;
+  }
+
+  // ignore JSON module failures when TypeScript is configured to ignore them
+  if (!options.resolveJsonModule) {
+    if (path.extname(moduleName).match(/\.json$/i)) {
+      return false;
+    }
   }
 
   // ignore resolver errors for multimedia files
@@ -199,11 +210,13 @@ export function logModuleBegin(
  * End a logging session for resolving a single module.
  *
  * @param log Resolver log
+ * @param options TypeScript compiler options
  * @param moduleName Module name
  * @param module Module resolution info, or `undefined` if resolution failed.
  */
 export function logModuleEnd(
   log: ResolverLog,
+  options: ts.ParsedCommandLine["options"],
   moduleName: string,
   module: ts.ResolvedModuleFull | undefined
 ): void {
@@ -226,7 +239,7 @@ export function logModuleEnd(
     );
     if (
       log.getMode() !== ResolverLogMode.Never &&
-      shouldLogResolverFailure(moduleName)
+      shouldLogResolverFailure(options, moduleName)
     ) {
       log.endFailure();
     } else {

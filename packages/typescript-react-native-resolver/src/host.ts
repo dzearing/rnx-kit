@@ -159,7 +159,8 @@ export function resolveModuleNames(
   _reusedNames: string[] | undefined,
   _redirectedReference?: ts.ResolvedProjectReference
 ): (ts.ResolvedModuleFull | undefined)[] {
-  const { log, allowedExtensions, replaceReactNativePackageName } = context;
+  const { options, log, allowedExtensions, replaceReactNativePackageName } =
+    context;
 
   //
   //  If the containing file is a type file (.d.ts), it can only import
@@ -183,7 +184,7 @@ export function resolveModuleNames(
     );
 
     resolutions.push(module);
-    logModuleEnd(log, moduleName, module);
+    logModuleEnd(log, options, moduleName, module);
   }
 
   return resolutions;

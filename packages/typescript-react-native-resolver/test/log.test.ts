@@ -214,27 +214,41 @@ describe("Log > changeModuleResolutionHostToLogFileSystemReads", () => {
 });
 
 describe("Log > shouldLogResolverFailure", () => {
+  const options: ts.ParsedCommandLine["options"] = {};
+
   test("returns false for node modules", () => {
-    expect(shouldLogResolverFailure("fs")).toBeFalse();
-    expect(shouldLogResolverFailure("path")).toBeFalse();
-    expect(shouldLogResolverFailure("fs/promises")).toBeFalse();
-    expect(shouldLogResolverFailure("node:util")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "fs")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "path")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "fs/promises")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "node:util")).toBeFalse();
+  });
+
+  test("returns false for JSON files when TypeScript is configured to ignore JSON modules", () => {
+    expect(
+      shouldLogResolverFailure({ resolveJsonModule: false }, "data.json")
+    ).toBeFalse();
+  });
+
+  test("returns true for JSON files when TypeScript is configured to resolve JSON modules", () => {
+    expect(
+      shouldLogResolverFailure({ resolveJsonModule: true }, "data.json")
+    ).toBeTrue();
   });
 
   test("returns false for multimedia files", () => {
-    expect(shouldLogResolverFailure("picture.jpg")).toBeFalse();
-    expect(shouldLogResolverFailure("video.mpeg")).toBeFalse();
-    expect(shouldLogResolverFailure("song.mp3")).toBeFalse();
-    expect(shouldLogResolverFailure("page.html")).toBeFalse();
-    expect(shouldLogResolverFailure("font.ttf")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "picture.jpg")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "video.mpeg")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "song.mp3")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "page.html")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "font.ttf")).toBeFalse();
   });
 
   test("returns false for code files", () => {
-    expect(shouldLogResolverFailure("styles.css")).toBeFalse();
+    expect(shouldLogResolverFailure(options, "styles.css")).toBeFalse();
   });
 
   test("returns true for normal modules", () => {
-    expect(shouldLogResolverFailure("find-up")).toBeTrue();
+    expect(shouldLogResolverFailure(options, "find-up")).toBeTrue();
   });
 });
 
@@ -271,12 +285,14 @@ describe("Log > logModuleBegin", () => {
 });
 
 describe("Log > logModuleEnd", () => {
+  const options: ts.ParsedCommandLine["options"] = {};
+
   afterEach(() => {
     jest.resetAllMocks();
   });
 
   test("ends the current logging session successfully when the module was resolved", () => {
-    logModuleEnd(mockedResolverLog, "clippy", {
+    logModuleEnd(mockedResolverLog, options, "clippy", {
       extension: ts.Extension.Ts,
       resolvedFileName: "clippy.native.ts",
     });
@@ -285,7 +301,7 @@ describe("Log > logModuleEnd", () => {
   });
 
   test("logs an ending message when the module was resolved", () => {
-    logModuleEnd(mockedResolverLog, "clippy", {
+    logModuleEnd(mockedResolverLog, options, "clippy", {
       extension: ts.Extension.Ts,
       resolvedFileName: "clippy.native.ts",
     });
@@ -293,18 +309,18 @@ describe("Log > logModuleEnd", () => {
   });
 
   test("ends the current logging session as a failure when the module was not resolved", () => {
-    logModuleEnd(mockedResolverLog, "bob", undefined);
+    logModuleEnd(mockedResolverLog, options, "bob", undefined);
     expect(mockEndSuccess).not.toBeCalled();
     expect(mockEndFailure).toBeCalled();
   });
 
   test("logs an ending message when the module was not resolved", () => {
-    logModuleEnd(mockedResolverLog, "bob", undefined);
+    logModuleEnd(mockedResolverLog, options, "bob", undefined);
     expect(mockLog).toBeCalled();
   });
 
   test("resets the current logging session when the module resolution failure should not be reported", () => {
-    logModuleEnd(mockedResolverLog, "fs", undefined);
+    logModuleEnd(mockedResolverLog, options, "fs", undefined);
     expect(mockEndSuccess).not.toBeCalled();
     expect(mockEndFailure).not.toBeCalled();
     expect(mockReset).toBeCalled();
