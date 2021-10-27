@@ -6,9 +6,6 @@ import {
 import path from "path";
 import ts from "typescript";
 
-// TODO: remove all of the workspaces stuff including dependencies
-import { getWorkspaces } from "workspace-tools";
-
 import { ExtensionsTypeScript, hasExtension } from "./extension";
 import {
   ResolverLog,
@@ -83,7 +80,6 @@ export function changeCompilerHostToUseReactNativeResolver(
     platformExtensions: [platform, ...(platformExtensionNames || [])].map(
       (e) => `.${e}` // prepend a '.' to each name to make it a file extension
     ),
-    workspaces: getWorkspaces(process.cwd()),
     allowedExtensions,
     replaceReactNativePackageName: createReactNativePackageNameReplacer(
       platform,

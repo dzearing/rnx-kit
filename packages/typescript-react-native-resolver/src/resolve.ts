@@ -8,7 +8,6 @@ import ts from "typescript";
 
 import { findModuleFile } from "./module";
 import { ResolverContext } from "./types";
-import { WorkspaceModuleRef } from "./workspace";
 
 /**
  * Resolve a module reference within a given package directory.
@@ -77,33 +76,6 @@ export function resolveModule(
   }
 
   return module;
-}
-
-/**
- * This module is part of a workspace (in-repo package). Search for it
- * within that package.
- *
- * @param context Resolver context
- * @param moduleRef Module to resolve
- * @param extensions List of allowed module file extensions
- * @returns Resolved module, or `undefined` if resolution fails
- */
-export function resolveWorkspaceModule(
-  context: ResolverContext,
-  moduleRef: WorkspaceModuleRef,
-  extensions: ts.Extension[]
-): ts.ResolvedModuleFull | undefined {
-  context.log.log(
-    "Loading module from workspace package '%s'.",
-    moduleRef.workspace.name
-  );
-
-  return resolveModule(
-    context,
-    moduleRef.workspace.path,
-    moduleRef.path,
-    extensions
-  );
 }
 
 function findPackageDependencyDir(

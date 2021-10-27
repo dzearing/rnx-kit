@@ -1,6 +1,5 @@
 import ts from "typescript";
 import type { ResolverLog } from "./log";
-import type { WorkspaceInfo } from "workspace-tools";
 
 /**
  * Host interface for handling module resolution queries.
@@ -67,11 +66,6 @@ export type ResolverContext = {
    * Ordered from highest precedence (index 0) to lowest.
    */
   readonly platformExtensions: string[];
-
-  /**
-   * Information about the monorepo's workspaces (packages).
-   */
-  readonly workspaces: WorkspaceInfo;
 
   /**
    * List of file extensions that can be used when resolving a module to a
