@@ -126,8 +126,9 @@ export function resolveModuleName(
     module = resolveFileModule(context, moduleRef, searchDir, extensions);
   }
   if (module) {
-    module.isExternalLibraryImport =
-      module.resolvedFileName.indexOf("/node_modules/") !== -1;
+    module.isExternalLibraryImport = !!module.resolvedFileName.match(
+      /[/\\]node_modules[/\\]/
+    );
 
     const { host, options } = context;
     if (host.realpath && !options.preserveSymlinks) {
