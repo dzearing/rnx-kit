@@ -6,18 +6,10 @@ import { changeModuleResolutionHostToUseReadCache } from "./cache";
 
 import type { CommandLine } from "./command-line";
 
-/**
- * Create a TypeScript program object using the given command line.
- *
- * If a react-native platform appears on the command-line, the program will
- * use a react-native module resolver which can handle platform extensions
- * such as ".ios.ts" and ".native.tsx". Otherwise, the program will use the
- * standard TypeScript module resolver.
- *
- * @param cmdLine Command line
- * @returns TypeScript program
- */
-export function createProgram(cmdLine: CommandLine): ts.Program {
+function configureCompilerHost(
+  compilerHost: ts.CompilerHost,
+  cmdLine: CommandLine
+): void {
   const {
     platform,
     platformExtensions,
@@ -25,8 +17,6 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
     traceReactNativeModuleResolutionErrors,
     traceResolutionLog,
   } = cmdLine.rnts;
-
-  const compilerHost = ts.createCompilerHost(cmdLine.ts.options);
 
   changeModuleResolutionHostToUseReadCache(compilerHost);
 
@@ -63,16 +53,65 @@ export function createProgram(cmdLine: CommandLine): ts.Program {
       compilerHost.trace = ts.sys.write;
     }
   }
+}
+
+/**
+ * Create a TypeScript program object using the given command line.
+ *
+ * If a react-native platform appears on the command-line, the program will
+ * use a react-native module resolver which can handle platform extensions
+ * such as ".ios.ts" and ".native.tsx". Otherwise, the program will use the
+ * standard TypeScript module resolver.
+ *
+ * @param cmdLine Command line
+ * @returns TypeScript program
+ */
+export function createProgram(cmdLine: CommandLine): ts.Program {
+  const host = ts.createCompilerHost(cmdLine.ts.options);
+
+  configureCompilerHost(host, cmdLine);
 
   const programOptions = {
     rootNames: cmdLine.ts.fileNames,
     options: cmdLine.ts.options,
     projectReferences: cmdLine.ts.projectReferences,
-    host: compilerHost,
+    host,
     configFileParsingDiagnostics: ts.getConfigFileParsingDiagnostics(
       cmdLine.ts
     ),
   };
+
   const program = ts.createProgram(programOptions);
+  return program;
+}
+
+/**
+ * Create a TypeScript incremental program using the given command line.
+ *
+ * If a react-native platform appears on the command-line, the program will
+ * use a react-native module resolver which can handle platform extensions
+ * such as ".ios.ts" and ".native.tsx". Otherwise, the program will use the
+ * standard TypeScript module resolver.
+ *
+ * @param cmdLine Command line
+ * @returns TypeScript incremental program
+ */
+export function createIncrementalProgram(
+  cmdLine: CommandLine
+): ts.EmitAndSemanticDiagnosticsBuilderProgram {
+  const host = ts.createIncrementalCompilerHost(cmdLine.ts.options);
+
+  configureCompilerHost(host, cmdLine);
+
+  const programOptions = {
+    rootNames: cmdLine.ts.fileNames,
+    options: cmdLine.ts.options,
+    projectReferences: cmdLine.ts.projectReferences,
+    host,
+    configFileParsingDiagnostics: ts.getConfigFileParsingDiagnostics(
+      cmdLine.ts
+    ),
+  };
+  const program = ts.createIncrementalProgram(programOptions);
   return program;
 }

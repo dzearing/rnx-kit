@@ -21,6 +21,11 @@ describe("Commands > compile", () => {
 
   const mockPrint = jest.fn();
 
+  const cmdLine: CommandLine = {
+    ts: { fileNames: [], options: {}, errors: [] },
+    rnts: {},
+  };
+
   beforeEach(() => {
     mockGetCompilerOptions.mockReturnValue({});
     mockGetConfigFileParsingDiagnostics.mockReturnValue([]);
@@ -53,12 +58,12 @@ describe("Commands > compile", () => {
   });
 
   test("emits files", () => {
-    compile({} as CommandLine);
+    compile(cmdLine);
     expect(mockEmit).toBeCalledTimes(1);
   });
 
   test("collects diagnostics from all sources", () => {
-    compile({} as CommandLine);
+    compile(cmdLine);
     expect(mockGetConfigFileParsingDiagnostics).toBeCalledTimes(1);
     expect(mockGetSyntacticDiagnostics).toBeCalledTimes(1);
     expect(mockGetOptionsDiagnostics).toBeCalledTimes(1);
@@ -92,7 +97,7 @@ describe("Commands > compile", () => {
     console.log = mockLog;
 
     try {
-      compile({} as CommandLine);
+      compile(cmdLine);
       expect(createDiagnosticWriter).toBeCalledTimes(1);
       expect(mockPrint).toBeCalledTimes(3);
       expect(mockLog).toBeCalledWith(expect.stringContaining("3 errors"));

@@ -53,8 +53,6 @@ export function cli(args: string[]): void {
     "baseUrl",
     "paths",
     "rootDirs",
-    "incremental",
-    "composite",
   ]);
 
   compile(cmdLine);

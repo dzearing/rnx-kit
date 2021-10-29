@@ -4,10 +4,14 @@ import os from "os";
 import ts from "typescript";
 
 import type { CommandLine } from "../command-line";
-import { createProgram } from "../program";
+import { createProgram, createIncrementalProgram } from "../program";
 
 export function compile(cmdLine: CommandLine): void {
-  const program = createProgram(cmdLine);
+  const isIncremental =
+    !!cmdLine.ts.options.incremental || !!cmdLine.ts.options.composite;
+  const program = isIncremental
+    ? createIncrementalProgram(cmdLine)
+    : createProgram(cmdLine);
 
   const isListFilesOnly = program.getCompilerOptions().listFilesOnly;
 

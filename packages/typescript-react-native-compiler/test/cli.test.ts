@@ -88,10 +88,6 @@ describe("CLI > cli", () => {
     testUnsupportedCmdLineParam(["--baseUrl", "foo"]);
   });
 
-  test("throws when unsupported option --incremental is on the command-line", () => {
-    testUnsupportedCmdLineParam(["--incremental"]);
-  });
-
   test("fails when an invalid project config file is given", () => {
     const oldWrite = process.stdout.write;
     const mockWrite = jest.fn();
@@ -152,14 +148,6 @@ describe("CLI > cli", () => {
 
   test("throws when unsupported option --rootDirs is in the config file", () => {
     testUnsupportedConfigOption("rootDirs", ["abc", "def"]);
-  });
-
-  test("throws when unsupported option --incremental is in the config file", () => {
-    testUnsupportedConfigOption("incremental", true);
-  });
-
-  test("throws when unsupported option --composite is in the config file", () => {
-    testUnsupportedConfigOption("composite", true);
   });
 
   test("invokes compile", () => {
